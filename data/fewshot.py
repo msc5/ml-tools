@@ -86,24 +86,6 @@ class Dataset:
         split = self.tree.get(directory)
         return split.generator(self.load_image)
 
-#      def __get_images(self, keys):
-#          # image = Image.open(os.path.join(self.dir, p))
-#          images = [
-#              torch.cat([
-#                  self.transform(
-#                      Image.open(
-#                          os.path.join(self.dir, p)
-#                      )).unsqueeze(0) for p in k
-#              ]).unsqueeze(0) for k in keys
-#          ]
-#          return torch.cat(images, dim=0).to(self.device)
-#
-#      def __getitem__(self, keys):
-#          s, q = keys
-#          support = self.__get_images(s)
-#          query = self.__get_images(q)
-#          return support, query
-
 
 class FewShotDataset (Dataset):
 
