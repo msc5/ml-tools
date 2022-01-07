@@ -1,9 +1,10 @@
 import os
+import time
 import pprint
 import random
 import itertools
 
-from .samplers import SimpleSampler, RandomSampler, BatchSampler, RandomBatchSampler
+from .samplers import SimpleSampler, BatchSampler, RandomBatchSampler
 
 
 class Tree:
@@ -20,6 +21,9 @@ class Tree:
                 setattr(self, k, v)
         self.children = {}
         self.iter = None
+        self.n = 0
+        self.n_children = 0
+        self.n_iter = 0
         if self.directory:
             self.put_directory(self.directory)
         if self.iters:
@@ -28,14 +32,17 @@ class Tree:
     def __str__(self):
         info = []
 
-        def f(v, n): return f'{str(v):{n}}' if v else ''
+        def f(v, n): return f'{str(v):{n}}' if v is not None else f'{"":{n}}'
 
         def cb(tree, level):
             info.append(
                 str(level) + ' : ' +
                 f(tree.path, 15) +
-                f(tree.val, 50) +
-                f(tree.iter, 40)
+                f(tree.val, 60) +
+                f(tree.iter, 60) +
+                f(tree.n, 10) +
+                f(tree.n_children, 10) +
+                f(tree.n_iter, 10)
             )
 
         self.bfs(cb)
@@ -50,11 +57,13 @@ class Tree:
         if self.iter:
             for iteration in self.iter:
                 if isinstance(iteration, Tree):
-                    yield from iteration
+                    #  yield from iteration
+                    yield from iteration.generator(callback)
                 if isinstance(iteration, list):
-                    yield from map(list, zip(*iteration))
+                    #  yield from map(list, zip(*iteration))
+                    yield from map(list, zip(*[i.generator(callback) for i in iteration]))
         else:
-            yield from callback(self)
+            yield callback(self)
 
     def put_directory(self, directory):
         self.directory = directory
@@ -73,9 +82,15 @@ class Tree:
     def put_iters(self, iters):
         assert iters is not None
         for item in iters:
-            level, generator, params = item
-            for tree in self.get_level(level=level):
-                tree.iter = generator(tree.get_children(), params)
+            self.put_iter(item)
+
+    def put_iter(self, item):
+        assert item is not None
+        level, generator, params = item
+        for tree in self.get_level(level=level):
+            tree.iter = generator(tree.get_children(), params)
+            batch_size = params.get('batch_size', 1)
+            tree.n_iter = tree.n_children // batch_size
 
     def depth(self):
         max_depth = [0]
@@ -103,6 +118,7 @@ class Tree:
 
     def put(self, path, val=None):
         assert path is not None
+        self.n += 1
         paths = path.split(os.sep)
         next_path = os.sep.join(paths[1:])
         key = paths[0]
@@ -117,10 +133,12 @@ class Tree:
         elif len(paths) == 1:
             new_tree = Tree(path, val)
             self.children[path] = new_tree
+            self.n_children += 1
             return new_tree
         elif not key in self.children:
             new_tree = Tree(key)
             self.children[key] = new_tree
+            self.n_children += 1
             return new_tree.put(next_path, val)
         elif key in self.children:
             curr = self.children[key]
@@ -179,7 +197,7 @@ class Tree:
         self.bfs(collect)
         return trees
 
-    def get_levels(self, key=None):
+    def all_levels(self, key=None):
         if not key:
             root = self
         else:
@@ -203,7 +221,10 @@ if __name__ == '__main__':
     #  path = 'datasets/miniimagenet'
     path = 'datasets/dummy'
 
+    start = time.perf_counter()
     tree = Tree(directory=path)
+    stop = time.perf_counter()
+    print(stop - start)
     #  print(tree)
 
     #  target = tree.get('split 1')
@@ -212,8 +233,8 @@ if __name__ == '__main__':
 
     print('Depth: ', tree.depth())
 
-    k = 3
-    n = 2
+    k = 1
+    n = 0
     m = 1
 
     tree.put_iters([
@@ -225,8 +246,8 @@ if __name__ == '__main__':
 
     N_images = len(tree.all_children())
     print('Total Files: ', N_images)
-
-    for i, x in enumerate(tree):
+    def callback(tree): return 'funny' + tree.val
+    for i, x in enumerate(tree.generator(callback)):
         print(i)
         pp.pprint(x)
         pass
