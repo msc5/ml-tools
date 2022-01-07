@@ -34,6 +34,7 @@ class Dataset:
             config = json.load(open(path))[self.name]
             self.structure = config['structure']
             self.class_level = config['class_level'] + 1
+            self.transform = ToTensor()
         except:
             print('Error Opening datasets.json')
             raise
@@ -78,7 +79,7 @@ class Dataset:
         Takes a tree as input and returns the file associated with its path
         """
         image = Image.open(tree.val)
-        return ToTensor(image)
+        return self.transform(image)
 
     def split(self, directory):
         assert directory is not None
@@ -143,7 +144,10 @@ if __name__ == '__main__':
     n = 5
     m = 1
 
+    start = time.perf_counter()
     dataset = FewShotDataset(path)
+    stop = time.perf_counter()
+    print(stop - start)
     print(dataset)
     #  print(len(dataset))
 
@@ -154,6 +158,10 @@ if __name__ == '__main__':
         'm': 1,
     }
 
+    start = time.perf_counter()
     for i, x in enumerate(dataset.split('train')):
+        pass
         print(i)
-        pp.pprint(x)
+        pp.pprint(x.shape)
+    stop = time.perf_counter()
+    print(stop - start)

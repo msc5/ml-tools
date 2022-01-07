@@ -21,6 +21,7 @@ class Tree:
                 setattr(self, k, v)
         self.children = {}
         self.iter = None
+        self.iters = None
         self.n = 0
         self.n_children = 0
         self.n_iter = 0
@@ -49,19 +50,26 @@ class Tree:
         return '\n'.join(info) + '\n'
 
     def __iter__(self):
-        def callback(tree): yield self.val
+        def callback(tree): return tree.val
+        self.reset_iters()
         return self.generator(callback)
 
     def generator(self, callback):
+        """
+        Returns an iterator over the tree along with a specified callback.
+        """
         assert callback is not None
+        self.reset_iters()
+        if self.iters:
+            self.put_iters(self.iters)
         if self.iter:
             for iteration in self.iter:
                 if isinstance(iteration, Tree):
-                    #  yield from iteration
                     yield from iteration.generator(callback)
                 if isinstance(iteration, list):
-                    #  yield from map(list, zip(*iteration))
-                    yield from map(list, zip(*[i.generator(callback) for i in iteration]))
+                    yield from map(list, zip(*[
+                        i.generator(callback) for i in iteration
+                    ]))
         else:
             yield callback(self)
 
@@ -79,8 +87,15 @@ class Tree:
         for level in range(self.depth() - 1):
             self.put_iters([(level, SimpleSampler, {})])
 
+    def reset_iters(self):
+        for level in range(self.depth() - 1):
+            self.put_iters([(level, SimpleSampler, {})])
+        if self.iters is not None:
+            self.put_iters(self.iters)
+
     def put_iters(self, iters):
         assert iters is not None
+        self.iters = iters
         for item in iters:
             self.put_iter(item)
 
@@ -246,11 +261,11 @@ if __name__ == '__main__':
 
     N_images = len(tree.all_children())
     print('Total Files: ', N_images)
-    def callback(tree): return 'funny' + tree.val
-    for i, x in enumerate(tree.generator(callback)):
+    print('Iterating Dataset...')
+    for i, x in enumerate(tree):
         print(i)
         pp.pprint(x)
-        pass
+    print('')
     n_images = (i + 1) * k * (n + m)
     print(n_images)
     print(n_images / N_images)
