@@ -2,6 +2,7 @@ import torch
 
 from torchvision.transforms import ToTensor
 
+from tqdm import tqdm
 from PIL import Image
 from statistics import mean
 
@@ -33,7 +34,7 @@ class Dataset:
             path = os.path.join('datasets', 'datasets.json')
             config = json.load(open(path))[self.name]
             self.structure = config['structure']
-            self.class_level = config['class_level'] + 1
+            self.class_level = config['class_level']
             self.transform = ToTensor()
         except:
             print('Error Opening datasets.json')
@@ -43,27 +44,28 @@ class Dataset:
         """
         Returns a string representation of the dataset
         """
-
         def callback(tree, level):
             levels[level].append((tree.n, tree.n_children))
-
         structure = ['Root', *self.structure]
         depth = self.tree.depth()
         levels = [[] for _ in range(depth)]
         self.tree.bfs(callback)
-
-        names = []
-        averages = []
-        counts = []
+        names, averages, counts, types = [], [], [], []
         for i, level in enumerate(levels):
             names.append(structure[i])
             size, children = zip(*level)
             averages.append(mean(children))
             counts.append(len(size))
-
+            if i == self.class_level:
+                types.append('Class')
+            elif i == self.class_level + 1:
+                types.append('Example')
+            else:
+                types.append('')
         return util.tabulate(
             ('Depth', range(depth)),
             ('Name', names),
+            ('Type', types),
             ('Count', counts),
             ('Average Children', averages)
         )
@@ -73,6 +75,12 @@ class Dataset:
         Returns an iterable over the files in the dataset
         """
         return self.tree.generator(self.load_image)
+
+    def __len__(self):
+        """
+        Returns the length of the dataset's total iteration
+        """
+        pass
 
     def load_image(self, tree):
         """
@@ -95,20 +103,34 @@ class FewShotDataset (Dataset):
     ):
         super().__init__(directory)
 
-    def get_iter(self, split, params):
+    def collate_images(self, iterator):
+        for task in iterator:
+            yield torch.cat([
+                torch.cat([
+                    c.unsqueeze(0)
+                    for c in classes
+                ], dim=0).unsqueeze(0)
+                for classes in task
+            ], dim=0)
+
+    def split(self, directory, params):
         """
         Returns an iterator over images in the dataset with the
         specified parameters
         """
+        assert directory is not None
+        assert params is not None
         bs = params['batch_size']
         k = params['k']
         n = params['n']
         m = params['m']
         self.tree.put_iters([
-            (self.class_level - 1, RandomBatchSampler, {'batch_size': k}),
-            (self.class_level, RandomBatchSampler, {'batch_size': n + m})
+            (self.class_level, RandomBatchSampler, {'batch_size': k}),
+            (self.class_level + 1, RandomBatchSampler, {'batch_size': n + m})
         ])
-        return self.split(split)
+        split = self.tree.get(directory)
+        iterator = split.generator(self.load_image)
+        return self.collate_images(iterator)
 
 
 if __name__ == '__main__':
@@ -121,17 +143,11 @@ if __name__ == '__main__':
     path = 'datasets/miniimagenet'
     #  path = 'datasets/dummy'
 
-    bs = 20
-    k = 5
-    n = 5
-    m = 1
-
     start = time.perf_counter()
     dataset = FewShotDataset(path)
     stop = time.perf_counter()
-    print(stop - start)
+    print('Initialize dataset: ', stop - start)
     print(dataset)
-    #  print(len(dataset))
 
     params = {
         'batch_size': 20,
@@ -140,10 +156,15 @@ if __name__ == '__main__':
         'm': 1,
     }
 
+    print('ITERATING: ', params)
     start = time.perf_counter()
-    for i, x in enumerate(dataset.split('train')):
+    iterator = dataset.split('train', params)
+    for i, x in enumerate(iterator):
+        print(f'{i:4}', x.shape)
         pass
-        print(i)
-        pp.pprint(x.shape)
     stop = time.perf_counter()
     print(stop - start)
+    N_images = len(dataset.tree.all_children())
+    n_images = (i + 1) * params['k'] * (params['n'] + params['m'])
+    print(n_images)
+    print(n_images / N_images)

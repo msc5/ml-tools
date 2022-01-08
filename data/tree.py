@@ -51,7 +51,6 @@ class Tree:
 
     def __iter__(self):
         def callback(tree): return tree.val
-        self.reset_iters()
         return self.generator(callback)
 
     def generator(self, callback):
@@ -59,9 +58,6 @@ class Tree:
         Returns an iterator over the tree along with a specified callback.
         """
         assert callback is not None
-        self.reset_iters()
-        if self.iters:
-            self.put_iters(self.iters)
         if self.iter:
             for iteration in self.iter:
                 if isinstance(iteration, Tree):
@@ -232,9 +228,9 @@ if __name__ == '__main__':
     #  for d in gen:
     #      pp.pprint(d)
 
-    #  path = 'datasets/omniglot'
+    path = 'datasets/omniglot'
     #  path = 'datasets/miniimagenet'
-    path = 'datasets/dummy'
+    #  path = 'datasets/dummy'
 
     start = time.perf_counter()
     tree = Tree(directory=path)
@@ -249,7 +245,7 @@ if __name__ == '__main__':
     print('Depth: ', tree.depth())
 
     k = 1
-    n = 0
+    n = 2
     m = 1
 
     tree.put_iters([
@@ -257,14 +253,18 @@ if __name__ == '__main__':
         (3, RandomBatchSampler, {'batch_size': n + m}),
     ])
 
-    print(tree)
+    #  print(tree)
 
     N_images = len(tree.all_children())
     print('Total Files: ', N_images)
     print('Iterating Dataset...')
+    start = time.perf_counter()
     for i, x in enumerate(tree):
         print(i)
-        pp.pprint(x)
+        #  pp.pprint(x)
+        pass
+    stop = time.perf_counter()
+    print(stop - start)
     print('')
     n_images = (i + 1) * k * (n + m)
     print(n_images)
