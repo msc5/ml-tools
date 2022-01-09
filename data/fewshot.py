@@ -11,6 +11,7 @@ import json
 import random
 import math
 import itertools
+import functools
 import time
 import pprint
 
@@ -25,16 +26,19 @@ class Dataset:
 
     def __init__(
             self,
-            directory: str
+            directory: str,
+            device: torch.device
     ):
         self.directory = directory
+        self.device = device
         self.name = directory.split(os.sep)[-1]
         self.tree = Tree(directory=directory)
         try:
             path = os.path.join('datasets', 'datasets.json')
             config = json.load(open(path))[self.name]
             self.structure = config['structure']
-            self.class_level = config['class_level']
+            self.class_level = config['class_level'] + 1
+            self.example_level = self.tree.depth() - 1
             self.transform = ToTensor()
         except:
             print('Error Opening datasets.json')
@@ -58,7 +62,7 @@ class Dataset:
             counts.append(len(size))
             if i == self.class_level:
                 types.append('Class')
-            elif i == self.class_level + 1:
+            elif i == self.example_level:
                 types.append('Example')
             else:
                 types.append('')
@@ -87,23 +91,39 @@ class Dataset:
         Takes a tree as input and returns the file associated with its path
         """
         image = Image.open(tree.val)
-        return self.transform(image)
+        return self.transform(image).to(device)
 
     def split(self, directory):
         assert directory is not None
         split = self.tree.get(directory)
         return split.generator(self.load_image)
 
+    def cat(self, tensors):
+        return torch.cat([x.unsqueeze(0) for x in tensors])
+
+    def batch(self, data, batch_size):
+        params = {
+            'batch_size': batch_size,
+            'keep_last': True,
+        }
+        for batch in BatchSampler(data, params):
+            yield self.cat(batch)
+
 
 class FewShotDataset (Dataset):
 
     def __init__(
             self,
-            directory: str
+            directory: str,
+            device: torch.device
     ):
-        super().__init__(directory)
+        super().__init__(directory, device)
 
     def collate_images(self, iterator):
+        """
+        Turns the set of images returned by tree iteration into
+        a task by collating lists with pytorch
+        """
         for task in iterator:
             yield torch.cat([
                 torch.cat([
@@ -113,24 +133,33 @@ class FewShotDataset (Dataset):
                 for classes in task
             ], dim=0)
 
-    def split(self, directory, params):
+    def split(self, params, directory):
         """
         Returns an iterator over images in the dataset with the
         specified parameters
         """
         assert directory is not None
         assert params is not None
-        bs = params['batch_size']
+        full_permute = params.get('full_permute', False)
+        batch_size = params.get('batch_size', 1)
         k = params['k']
         n = params['n']
         m = params['m']
         self.tree.put_iters([
-            (self.class_level, RandomBatchSampler, {'batch_size': k}),
-            (self.class_level + 1, RandomBatchSampler, {'batch_size': n + m})
+            (self.class_level - 1, RandomBatchSampler, {
+                'batch_size': k,
+                'full_permute': full_permute
+            }),
+            (self.class_level, RandomBatchSampler, {
+                'batch_size': n + m,
+                'full_permute': full_permute
+            })
         ])
         split = self.tree.get(directory)
-        iterator = split.generator(self.load_image)
-        return self.collate_images(iterator)
+        images = split.generator(self.load_image)
+        tasks = self.collate_images(images)
+        batches = self.batch(tasks, batch_size)
+        yield from batches
 
 
 if __name__ == '__main__':
@@ -140,31 +169,34 @@ if __name__ == '__main__':
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     #  path = 'datasets/omniglot'
-    path = 'datasets/miniimagenet'
-    #  path = 'datasets/dummy'
+    #  path = 'datasets/miniimagenet'
+    path = 'datasets/dummy'
 
     start = time.perf_counter()
-    dataset = FewShotDataset(path)
+    dataset = FewShotDataset(path, device)
     stop = time.perf_counter()
-    print('Initialize dataset: ', stop - start)
+    print('INITIALIZE TIME: ', stop - start)
     print(dataset)
 
     params = {
         'batch_size': 20,
-        'k': 5,
-        'n': 5,
+        'full_permute': True,
+        'k': 1,
+        'n': 0,
         'm': 1,
     }
 
     print('ITERATING: ', params)
     start = time.perf_counter()
-    iterator = dataset.split('train', params)
+    iterator = dataset.split(params, 'train')
+    n_seen = 0
     for i, x in enumerate(iterator):
         print(f'{i:4}', x.shape)
+        n_seen += functools.reduce(lambda a, b: a * b, x.shape[:3])
         pass
+    N_images = len(dataset.tree.get('train').all_children())
     stop = time.perf_counter()
-    print(stop - start)
-    N_images = len(dataset.tree.all_children())
-    n_images = (i + 1) * params['k'] * (params['n'] + params['m'])
-    print(n_images)
-    print(n_images / N_images)
+    print('ITERATION TIME: ', stop - start)
+    print('TOTAL IMAGES: ', N_images)
+    print('SEEN IMAGES: ', n_seen)
+    print('PERCENT PERMUTED: ', 100 * (n_seen / N_images))

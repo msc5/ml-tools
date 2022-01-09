@@ -1,279 +1,97 @@
 import os
-import time
 import pprint
-import random
-import itertools
+import collections
 
-from .samplers import SimpleSampler, BatchSampler, RandomBatchSampler
+from pathlib import Path
+
+
+class color:
+    PURPLE = '\033[1;35;48m'
+    CYAN = '\033[1;36;48m'
+    BOLD = '\033[1;37;48m'
+    BLUE = '\033[1;34;48m'
+    GREEN = '\033[1;32;48m'
+    YELLOW = '\033[1;33;48m'
+    RED = '\033[1;31;48m'
+    BLACK = '\033[1;30;48m'
+    UNDERLINE = '\033[4;37;48m'
+    END = '\033[1;37;0m'
+
+
+class TreeNode:
+
+    def __init__(self, key, path=None):
+        self.key = key
+        self.path = path
+        self.files = []
+        self.children = collections.OrderedDict()
+
+    def add_child(self, child):
+        self.children[child.key] = child
+
+    def __iter__(self):
+        pass
+
+    def __next__(self):
+        pass
 
 
 class Tree:
 
-    def __init__(
-            self,
-            path: str = None,
-            val: object = None,
-            directory: str = None,
-            iters: list = None
-    ):
-        for k, v in locals().items():
-            if k != 'self':
-                setattr(self, k, v)
-        self.children = {}
-        self.iter = None
-        self.iters = None
-        self.n = 0
-        self.n_children = 0
-        self.n_iter = 0
-        if self.directory:
-            self.put_directory(self.directory)
-        if self.iters:
-            self.put_iters(self.iters)
+    def __init__(self, directory):
+        self.path = Path(directory)
+        self.root = TreeNode(self.path.name, self.path)
+        self.build_from_dir()
 
     def __str__(self):
-        info = []
-
-        def f(v, n): return f'{str(v):{n}}' if v is not None else f'{"":{n}}'
-
-        def cb(tree, level):
-            info.append(
-                str(level) + ' : ' +
-                f(tree.path, 15) +
-                f(tree.val, 60) +
-                f(tree.iter, 60) +
-                f(tree.n, 10) +
-                f(tree.n_children, 10) +
-                f(tree.n_iter, 10)
-            )
-
-        self.bfs(cb)
-        return '\n'.join(info) + '\n'
-
-    def __iter__(self):
-        def callback(tree): return tree.val
-        return self.generator(callback)
-
-    def generator(self, callback):
         """
-        Returns an iterator over the tree along with a specified callback.
+        Returns a string representation of the Tree in DFS order
         """
-        assert callback is not None
-        if self.iter:
-            for iteration in self.iter:
-                if isinstance(iteration, Tree):
-                    yield from iteration.generator(callback)
-                if isinstance(iteration, list):
-                    yield from map(list, zip(*[
-                        i.generator(callback) for i in iteration
-                    ]))
-        else:
-            yield callback(self)
 
-    def put_directory(self, directory):
-        self.directory = directory
-        cut = len(os.path.split(self.directory)) - 1
-        for root, dirs, files in os.walk(self.directory):
-            rel_root = os.path.join(*root.split(os.sep)[cut:])
-            self.put(rel_root, root)
-            if files:
-                for f in files:
-                    p = os.path.join(rel_root, f)
-                    v = os.path.join(root, f)
-                    self.put(p, v)
-        for level in range(self.depth() - 1):
-            self.put_iters([(level, SimpleSampler, {})])
+        def space(v, n): return f'{"":>{n * 5}}{v}'
 
-    def reset_iters(self):
-        for level in range(self.depth() - 1):
-            self.put_iters([(level, SimpleSampler, {})])
-        if self.iters is not None:
-            self.put_iters(self.iters)
+        def callback(node, params):
+            msg.append(space(node.key, params['depth']))
+            params['depth'] += 1
 
-    def put_iters(self, iters):
-        assert iters is not None
-        self.iters = iters
-        for item in iters:
-            self.put_iter(item)
+        msg = []
+        self.dfs(callback, {'depth': 0})
+        return '\n'.join(msg)
 
-    def put_iter(self, item):
-        assert item is not None
-        level, generator, params = item
-        for tree in self.get_level(level=level):
-            tree.iter = generator(tree.get_children(), params)
-            batch_size = params.get('batch_size', 1)
-            tree.n_iter = tree.n_children // batch_size
+    def bfs(self, callback=None, params={}):
+        queue = [self.root]
+        while queue:
+            curr = queue.pop(0)
+            if callback:
+                callback(curr, params)
+            for key, child in curr.children.items():
+                queue.append(child)
 
-    def depth(self):
-        max_depth = [0]
+    def dfs(self, callback=None, params={}):
+        def traverse(node, params):
+            if callback:
+                callback(node, params)
+            for key, child in node.children.items():
+                traverse(child, params.copy())
+        traverse(self.root, params)
 
-        def cb(tree, level):
-            if level > max_depth[0]:
-                max_depth[0] = level
-        self.bfs(cb)
-        return max_depth[0] + 1
-
-    def bfs(self, cb=None):
-        q = [(self, 0)]
-        while q:
-            curr, level = q.pop(0)
-            if cb:
-                cb(curr, level)
-            for key, tree in curr.children.items():
-                q.append((tree, level + 1))
-
-    def dfs(self, cb=None):
-        if cb:
-            cb(self)
-        for tree in self.get_children():
-            tree.dfs(cb)
-
-    def put(self, path, val=None):
-        assert path is not None
-        self.n += 1
-        paths = path.split(os.sep)
-        next_path = os.sep.join(paths[1:])
-        key = paths[0]
-        if not self.path:
-            self.path = key
-        if key == self.path:
-            if len(paths) == 1:
-                self.key = key
-                self.val = val
-                return self
-            return self.put(next_path, val)
-        elif len(paths) == 1:
-            new_tree = Tree(path, val)
-            self.children[path] = new_tree
-            self.n_children += 1
-            return new_tree
-        elif not key in self.children:
-            new_tree = Tree(key)
-            self.children[key] = new_tree
-            self.n_children += 1
-            return new_tree.put(next_path, val)
-        elif key in self.children:
-            curr = self.children[key]
-            return curr.put(next_path, val)
-
-    def get(self, path):
-        assert path is not None
-        paths = path.split(os.sep)
-        next_path = os.sep.join(paths[1:])
-        key = paths[0]
-        #  print('PATH: ', self.path, key)
-        if key == self.path:
-            return self.get(next_path)
-        if key in self.children:
-            if len(paths) == 1:
-                return self.children[key]
-            return self.children[key].get(next_path)
-        else:
-            return None
-
-    def get_children(self, key=None):
-        if not key:
-            root = self
-        else:
-            root = self.get(key)
-        assert root is not None
-        return list(root.children.values())
-
-    def all_children(self, key=None):
-        if not key:
-            root = self
-        else:
-            root = self.get(key)
-        assert root is not None
-        children = []
-
-        def collect(tree, level):
-            if not tree.children:
-                children.append(tree)
-
-        self.bfs(collect)
-        return children
-
-    def get_level(self, key=None, level=0):
-        if not key:
-            root = self
-        else:
-            root = self.get(key)
-        assert root is not None
-        trees = []
-
-        def collect(tree, l):
-            if l == level:
-                trees.append(tree)
-
-        self.bfs(collect)
-        return trees
-
-    def all_levels(self, key=None):
-        if not key:
-            root = self
-        else:
-            root = self.get(key)
-        assert root is not None
-        return [self.get_level(level=l) for l in range(self.depth())]
+    def build_from_dir(self):
+        def traverse(parent: TreeNode):
+            for path in parent.path.iterdir():
+                if path.is_dir():
+                    child_node = TreeNode(path.name, path)
+                    parent.add_child(child_node)
+                    traverse(child_node)
+                else:
+                    parent.files.append(Path(path))
+        traverse(self.root)
 
 
 if __name__ == '__main__':
 
-    pp = pprint.PrettyPrinter(indent=4)
+    #  directory = 'datasets/miniimagenet'
+    #  directory = 'datasets/omniglot'
+    directory = 'datasets/dummy'
 
-    #  chars = 'abcdefghijklmnopqrstuvwxyz'
-    #  data = [''.join(random.sample(chars, 5)) for _ in range(50)]
-    #  pp.pprint(data)
-    #  gen = rbs(data, {'batch_size': 7, 'keep_last': False})
-    #  for d in gen:
-    #      pp.pprint(d)
-
-    path = 'datasets/omniglot'
-    #  path = 'datasets/miniimagenet'
-    #  path = 'datasets/dummy'
-
-    start = time.perf_counter()
-    tree = Tree(directory=path)
-    stop = time.perf_counter()
-    print(stop - start)
+    tree = Tree(directory)
     #  print(tree)
-
-    #  target = tree.get('split 1')
-    #  print(tree)
-    #  print(target)
-
-    print('Depth: ', tree.depth())
-
-    k = 1
-    n = 2
-    m = 1
-
-    tree.put_iters([
-        (2, RandomBatchSampler, {'batch_size': k}),
-        (3, RandomBatchSampler, {'batch_size': n + m}),
-    ])
-
-    #  print(tree)
-
-    N_images = len(tree.all_children())
-    print('Total Files: ', N_images)
-    print('Iterating Dataset...')
-    start = time.perf_counter()
-    for i, x in enumerate(tree):
-        print(i)
-        #  pp.pprint(x)
-        pass
-    stop = time.perf_counter()
-    print(stop - start)
-    print('')
-    n_images = (i + 1) * k * (n + m)
-    print(n_images)
-    print(n_images / N_images)
-
-    #  print('Classes:')
-    #  classes = tree.get_level(level=3)
-    #  pp.pprint([c.val for c in classes])
-    #
-    #  print('Data:')
-    #  children = tree.all_children()
-    #  pp.pprint([c.val for c in children])

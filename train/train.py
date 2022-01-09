@@ -150,102 +150,43 @@ def omniglotCallBack(
     return loss, acc
 
 
-def build_model(model_config):
-    if model_config['arch'] == 'RelationNetwork':
-        in_feat_rel = 64 if config['dataset'] == 'Omniglot' else 576
-        model = arch.RelationNetwork(64, 64, in_feat_rel, k, n, m)
-    elif model_config['arch'] == 'MatchingNetwork':
-        model = arch.MatchingNets(device, 64, 64)
-    elif model_config['arch'] == 'CustomNetwork':
-        model = arch.CustomNetwork(3, 28, 64, 16, device)
+def build_model(model_config, data_config):
+    channels = data_config['channels']
+    if model_config['arch'] == 'CustomNetwork':
+        meta_layers = data_config['meta_layers']
+        model = arch.CustomNetwork(meta_layers, channels, 64, 16, device)
+        return model
 
 
 if __name__ == '__main__':
 
-    config = json.load(open('config.json'))
+    main_config = json.load(open('config.json'))
+    dataset_config = json.load(open(os.path.join('datasets', 'datasets.json')))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    models = config['models']
-    experiments = config['experiments']
+    models = main_config['models']
+    experiments = main_config['experiments']
+    todo = main_config['todo']
 
-    for n, m in models.items():
-        for e, p in experiments.items():
-            train(
-                n,
-                build_model(m),
-                data.fewshot.emitFewShotLoader(
-                    p['dataset'],
-                    device,
-                    p['todo'],
-                    p['batch_size'],
-                    p['k'],
-                    p['n'],
-                    p['m']
-                ),
-                optimizer,
-                scheduler,
-                m['loss_fn'],
-                p['epochs'],
-                device
-            )
+    for item in todo:
+        model_name, exp_name = item
+        model_config = models[model_name]
+        exp_config = experiments[exp_name]
+        dataset_name = exp_config['dataset']
+        data_config = dataset_config[dataset_name]
+        model = build_model(model_config, data_config)
+        loader = data.fewshot.FewShotDataset(
+            directory='datasets/' + dataset_name,
+            device=device
+        )
+        if exp_config['todo'] == 'train':
+            #  train(
+            #      model_name,
+            #      model,
+            #      loader,
+            #      optimizer,
+            #      scheduler,
 
-    # # Task setup
-    # k = config['k']           # Number of classes
-    # n = config['n']           # Number of examples per support class
-    # m = config['m']           # Number of examples per query class
-
-    # batch_size = config['batch_size']
-
-    # dataloader = data.emitFewShotLoader(config['dataset'], batch_size, k, n, m)
-
-    # filters_in = 64
-
-    # if config['arch'] == 'RelationNetwork':
-    #     in_feat_rel = 64 if config['dataset'] == 'Omniglot' else 576
-    #     model = arch.RelationNetwork(filters_in, 64, in_feat_rel, k, n, m)
-    # elif config['arch'] == 'MatchingNetwork':
-    #     model = arch.MatchingNets(device, filters_in, 64)
-    # elif config['arch'] == 'CustomNetwork':
-    #     model = arch.CustomNetwork(3, 28, filters_in, 16, k, n, m, device)
-
-    # if config['loss_fn'] == 'MSE':
-    #     loss_fn = nn.MSELoss()
-    # elif config['loss_fn'] == 'NLL':
-    #     loss_fn = nn.NLLLoss()
-    # elif config['loss_fn'] == 'CrossEntropy':
-    #     loss_fn = nn.CrossEntropy()
-
-    # model_name = config['name']
-    # model_arch = config['arch']
-    # lr = config['learning_rate']
-    # schedule = config['schedule']
-    # epochs = config['epochs']
-
-    # optimizer = optim.Adam(model.parameters(), lr=lr)
-    # scheduler = optim.lr_scheduler.MultiStepLR(optimizer, schedule, gamma=0.5)
-
-    # print(
-    #     f'Training {model_arch} {model_name} on {k}-way {n}-shot {m}-query-shot')
-
-    # if config['train']:
-    #     train(
-    #         model_name,
-    #         model,
-    #         dataloader,
-    #         callback,
-    #         optimizer,
-    #         scheduler,
-    #         loss_fn,
-    #         epochs,
-    #         device
-    #     )
-    # if config['test']:
-    #     test(
-    #         model_name,
-    #         model,
-    #         test_dataloader,
-    #         callback,
-    #         loss_fn,
-    #         device,
-    #     )
+            #  )
+        elif exp_config['todo'] == 'test':
