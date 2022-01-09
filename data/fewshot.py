@@ -2,17 +2,12 @@ import torch
 
 from torchvision.transforms import ToTensor
 
-from tqdm import tqdm
 from PIL import Image
 from statistics import mean
 from pathlib import Path
+from json import load
 
 import os
-import json
-import random
-import math
-import itertools
-import functools
 import time
 import pprint
 import collections
@@ -21,7 +16,6 @@ import util
 
 from .tests import iterate_dataset
 from .tree import Tree
-#  from .samplers import BatchSampler, RandomSampler, RandomBatchSampler
 
 
 class Dataset:
@@ -37,7 +31,7 @@ class Dataset:
         self.name = self.path.name
         self.transform = ToTensor()
         try:
-            config = json.load(open('config.json'))['datasets'][self.name]
+            config = load(open('config.json'))['datasets'][self.name]
             self.structure = ['Root', *config['structure']]
             self.class_level = config['class_level'] + 1
         except:
@@ -144,12 +138,12 @@ class FewShotDataset (Dataset):
         yield from batches
 
 
-
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter()
 
     times = collections.defaultdict(float)
+
     def timer(callback, label):
         start = time.perf_counter()
         val = callback()
@@ -163,7 +157,7 @@ if __name__ == '__main__':
     path = 'datasets/miniimagenet'
     #  path = 'datasets/dummy'
 
-    dataset = timer(lambda : FewShotDataset(path, device), 'DATASET INIT')
+    dataset = timer(lambda: FewShotDataset(path, device), 'DATASET INIT')
     _ = timer(lambda: print(dataset), 'DATASET __STR__')
 
     pp.pprint(dict(times))
