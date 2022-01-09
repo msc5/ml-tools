@@ -8,37 +8,34 @@ from pathlib import Path
 from .samplers import Sampler, BatchSampler, ParallelSampler
 
 
-class color:
-    PURPLE = '\033[1;35;48m'
-    CYAN = '\033[1;36;48m'
-    BOLD = '\033[1;37;48m'
-    BLUE = '\033[1;34;48m'
-    GREEN = '\033[1;32;48m'
-    YELLOW = '\033[1;33;48m'
-    RED = '\033[1;31;48m'
-    BLACK = '\033[1;30;48m'
-    UNDERLINE = '\033[4;37;48m'
-    END = '\033[1;37;0m'
-
-
 class TreeNode:
 
     def __init__(self, key, path=None):
         self.key = key
         self.path = path
         self.files = []
+        self.info = collections.defaultdict(int)
         self.children = collections.OrderedDict()
         self.sampler = None
 
-    def add_child(self, child):
+    def add_child(self, path):
+        child = TreeNode(path.name, path)
+        if child.key in self.children:
+            raise KeyError
+        self.info['n_children'] += 1
         self.children[child.key] = child
+        return child
+
+    def add_file(self, path):
+        self.info['n_files'] += 1
+        self.files.append(Path(path))
 
     def __iter__(self):
         if self.files:
             yield from self.files
         elif not self.sampler:
             children = list(self.children.values())
-            self.sampler = ParallelSampler(children, {'batch_size': 2})
+            self.sampler = Sampler(children, {'batch_size': 2})
             for sample in self.sampler:
                 if isinstance(sample, list):
                     yield sample
@@ -91,15 +88,37 @@ class Tree:
         traverse(self.root, params)
 
     def build_from_dir(self):
-        def traverse(parent: TreeNode):
+        def traverse(parent, depth):
+            size = 1
+            N_children = N_files = 0
             for path in parent.path.iterdir():
                 if path.is_dir():
-                    child_node = TreeNode(path.name, path)
-                    parent.add_child(child_node)
-                    traverse(child_node)
+                    child = parent.add_child(path)
+                    s, c, f = traverse(child, depth + 1)
+                    size = s if s > size else size
+                    N_children += c
+                    N_files += f
+                    self.levels['nodes'][depth + 1] += 1
                 else:
-                    parent.files.append(Path(path))
-        traverse(self.root)
+                    parent.add_file(path)
+                    N_files += 1
+                    self.levels['files'][depth + 1] += 1
+            parent.info['size'] = size
+            parent.info['depth'] = depth
+            parent.info['N_children'] = N_children
+            parent.info['N_files'] = N_files
+            return size + 1, N_children + 1, N_files
+        self.levels = {
+            'nodes': collections.defaultdict(int),
+            'files': collections.defaultdict(int)
+        }
+        traverse(self.root, 0)
+        self.size = self.root.info['size'] + 1
+        self.levels = {
+            k: [
+                v[d] for d in range(self.size)
+            ] for k, v in self.levels.items()
+        }
 
 
 if __name__ == '__main__':
@@ -117,4 +136,5 @@ if __name__ == '__main__':
     #  print(tree)
 
     for i, x in enumerate(tree):
+        print(i)
         pp.pprint(x)

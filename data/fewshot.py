@@ -5,6 +5,7 @@ from torchvision.transforms import ToTensor
 from tqdm import tqdm
 from PIL import Image
 from statistics import mean
+from pathlib import Path
 
 import os
 import json
@@ -14,12 +15,13 @@ import itertools
 import functools
 import time
 import pprint
+import collections
 
 import util
 
 from .tests import iterate_dataset
 from .tree import Tree
-from .samplers import BatchSampler, RandomSampler, RandomBatchSampler
+#  from .samplers import BatchSampler, RandomSampler, RandomBatchSampler
 
 
 class Dataset:
@@ -29,17 +31,15 @@ class Dataset:
             directory: str,
             device: torch.device
     ):
-        self.directory = directory
         self.device = device
-        self.name = directory.split(os.sep)[-1]
-        self.tree = Tree(directory=directory)
+        self.tree = Tree(directory)
+        self.path = Path(directory)
+        self.name = self.path.name
+        self.transform = ToTensor()
         try:
-            path = os.path.join('datasets', 'datasets.json')
-            config = json.load(open(path))[self.name]
-            self.structure = config['structure']
+            config = json.load(open('config.json'))['datasets'][self.name]
+            self.structure = ['Root', *config['structure']]
             self.class_level = config['class_level'] + 1
-            self.example_level = self.tree.depth() - 1
-            self.transform = ToTensor()
         except:
             print('Error Opening datasets.json')
             raise
@@ -48,30 +48,12 @@ class Dataset:
         """
         Returns a string representation of the dataset
         """
-        def callback(tree, level):
-            levels[level].append((tree.n, tree.n_children))
-        structure = ['Root', *self.structure]
-        depth = self.tree.depth()
-        levels = [[] for _ in range(depth)]
-        self.tree.bfs(callback)
-        names, averages, counts, types = [], [], [], []
-        for i, level in enumerate(levels):
-            names.append(structure[i])
-            size, children = zip(*level)
-            averages.append(mean(children))
-            counts.append(len(size))
-            if i == self.class_level:
-                types.append('Class')
-            elif i == self.example_level:
-                types.append('Example')
-            else:
-                types.append('')
-        return util.tabulate(
-            ('Depth', range(depth)),
-            ('Name', names),
-            ('Type', types),
-            ('Count', counts),
-            ('Average Children', averages)
+        size = self.tree.root.info['size']
+        return self.name + '\n' + util.tabulate(
+            ('Depth', range(size + 1)),
+            ('Name', self.structure),
+            ('Folder Count', self.tree.levels['nodes']),
+            ('File Count', self.tree.levels['files']),
         )
 
     def __iter__(self):
@@ -162,41 +144,58 @@ class FewShotDataset (Dataset):
         yield from batches
 
 
+
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter()
 
+    times = collections.defaultdict(float)
+    def timer(callback, label):
+        start = time.perf_counter()
+        val = callback()
+        stop = time.perf_counter()
+        times[label] = stop - start
+        return val
+
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     #  path = 'datasets/omniglot'
-    #  path = 'datasets/miniimagenet'
-    path = 'datasets/dummy'
+    path = 'datasets/miniimagenet'
+    #  path = 'datasets/dummy'
 
-    start = time.perf_counter()
-    dataset = FewShotDataset(path, device)
-    stop = time.perf_counter()
-    print('INITIALIZE TIME: ', stop - start)
-    print(dataset)
+    dataset = timer(lambda : FewShotDataset(path, device), 'DATASET INIT')
+    _ = timer(lambda: print(dataset), 'DATASET __STR__')
 
-    params = {
-        'batch_size': 20,
-        'full_permute': True,
-        'k': 1,
-        'n': 0,
-        'm': 1,
-    }
+    pp.pprint(dict(times))
 
-    print('ITERATING: ', params)
-    start = time.perf_counter()
-    iterator = dataset.split(params, 'train')
-    n_seen = 0
-    for i, x in enumerate(iterator):
-        print(f'{i:4}', x.shape)
-        n_seen += functools.reduce(lambda a, b: a * b, x.shape[:3])
-        pass
-    N_images = len(dataset.tree.get('train').all_children())
-    stop = time.perf_counter()
-    print('ITERATION TIME: ', stop - start)
-    print('TOTAL IMAGES: ', N_images)
-    print('SEEN IMAGES: ', n_seen)
-    print('PERCENT PERMUTED: ', 100 * (n_seen / N_images))
+    #  start = time.perf_counter()
+    #  dataset = FewShotDataset(path, device)
+    #  stop = time.perf_counter()
+    #  print('INITIALIZE TIME: ', stop - start)
+    #  start = time.perf_counter()
+    #  print(dataset)
+    #  stop = time.perf_counter()
+    #  print('__STR__ TIME: ', stop - start)
+
+    #  params = {
+    #      'batch_size': 20,
+    #      'full_permute': True,
+    #      'k': 1,
+    #      'n': 0,
+    #      'm': 1,
+    #  }
+
+    #  print('ITERATING: ', params)
+    #  start = time.perf_counter()
+    #  iterator = dataset.split(params, 'train')
+    #  n_seen = 0
+    #  for i, x in enumerate(iterator):
+    #      print(f'{i:4}', x.shape)
+    #      n_seen += functools.reduce(lambda a, b: a * b, x.shape[:3])
+    #      pass
+    #  N_images = len(dataset.tree.get('train').all_children())
+    #  stop = time.perf_counter()
+    #  print('ITERATION TIME: ', stop - start)
+    #  print('TOTAL IMAGES: ', N_images)
+    #  print('SEEN IMAGES: ', n_seen)
+    #  print('PERCENT PERMUTED: ', 100 * (n_seen / N_images))
