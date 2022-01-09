@@ -90,27 +90,27 @@ if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter(width=300)
 
-    data = [f'{i:3}' for i in range(30)]
-    #  sampler = BatchSampler(data, {'batch_size': 3})
-    sampler = Sampler(data, {})
-    print(data)
-    for i, x in enumerate(sampler):
-        print(i, x)
+    #  data = [f'{i:3}' for i in range(30)]
+    #  #  sampler = BatchSampler(data, {'batch_size': 3})
+    #  sampler = Sampler(data, {})
+    #  print(data)
+    #  for i, x in enumerate(sampler):
+    #      print(i, x)
 
-    #  m = (5, 20)
-    #  data = [
-    #      [
-    #          f'{j - m[0] + 1:3.0f}_{i:<3.0f}' for i in range(j)
-    #      ] for j in range(*m)
-    #  ]
-    #  pp.pprint([[a for a in b] for b in data])
-    #  sampler = ParallelSampler(
-    #      data,
-    #      {'batch_size': m[0]}
-    #  )
-    #  print(len(sampler))
-    #  #  sampler = ParallelSampler(iter(iter(d)
-    #  #                            for d in data), {'batch_size': m[0]})
+    m = (5, 20)
+    data = [
+        [
+            f'{j - m[0] + 1:3.0f}_{i:<3.0f}' for i in range(j)
+        ] for j in range(*m)
+    ]
+    pp.pprint([[a for a in b] for b in data])
+    sampler = ParallelSampler(
+        data,
+        {'batch_size': m[0]}
+    )
+    print(len(sampler))
+    #  sampler = ParallelSampler(iter(iter(d)
+    #                            for d in data), {'batch_size': m[0]})
 
     for i, x in enumerate(sampler):
         print(f'{i:3}', x)

@@ -5,6 +5,7 @@ import time
 
 from pathlib import Path
 
+from util import Color, Timer
 from .samplers import Sampler, BatchSampler, ParallelSampler
 
 
@@ -15,8 +16,19 @@ class TreeNode:
         self.path = path
         self.files = []
         self.info = collections.defaultdict(int)
-        self.children = collections.OrderedDict()
-        self.sampler = None
+        self.children = {}
+        self.sampler = Sampler
+        self.params = {}
+        self.callback = lambda x: x
+
+    def __len__(self):
+        if self.sampler:
+            return len(self.sampler)
+        else:
+            return len(self.children)
+
+    def __iter__(self):
+        return self.generate()
 
     def add_child(self, path):
         child = TreeNode(path.name, path)
@@ -30,19 +42,18 @@ class TreeNode:
         self.info['n_files'] += 1
         self.files.append(Path(path))
 
-    def __iter__(self):
+    def generate(self):
+        #  print(self.key, self.callback)
         if self.files:
-            yield from self.files
-        elif not self.sampler:
-            children = list(self.children.values())
-            self.sampler = Sampler(children, {'batch_size': 2})
-            for sample in self.sampler:
-                if isinstance(sample, list):
-                    yield sample
-                else:
-                    yield from sample
-        elif self.sampler:
-            yield from self.sampler
+            data = [self.callback(f) for f in self.files]
+        else:
+            data = list(self.children.values())
+        sampler = self.sampler(data, self.params)
+        for sample in sampler:
+            if isinstance(sample, TreeNode):
+                yield from sample.generate()
+            elif isinstance(sample, list):
+                yield sample
 
 
 class Tree:
@@ -57,18 +68,33 @@ class Tree:
         Returns a string representation of the Tree in DFS order
         """
 
-        def space(v, n): return f'{"":>{n * 5}}{v}'
+        def format(vals, n):
+            data = ''.join([f'{v:<40}' for v in vals])
+            return f'{"":>{n * 4}}' + data
 
         def callback(node, params):
-            msg.append(space(node.key, params['depth']))
-            params['depth'] += 1
-
+            msg.append(format([
+                Color.CYAN(node.key),
+                Color.YELLOW(str(node.sampler)),
+                Color.GREEN(str(node.callback))
+            ], node.info['depth']))
         msg = []
-        self.dfs(callback, {'depth': 0})
+        self.dfs(callback)
         return '\n'.join(msg)
 
     def __iter__(self):
         yield from self.root
+
+    def put_samplers(self, samplers, callback):
+        def put_sampler(node, params):
+            depth = node.info['depth']
+            node.callback = callback
+            if depth in samplers:
+                node.sampler, node.params = samplers[depth]
+            else:
+                node.sampler, node.params = Sampler, {}
+        self.dfs(put_sampler)
+        return self
 
     def bfs(self, callback=None, params={}):
         queue = [self.root]
@@ -76,14 +102,16 @@ class Tree:
             curr = queue.pop(0)
             if callback:
                 callback(curr, params)
-            for key, child in curr.children.items():
+            children = curr.children.items()
+            for key, child in sorted(children):
                 queue.append(child)
 
     def dfs(self, callback=None, params={}):
         def traverse(node, params):
             if callback:
                 callback(node, params)
-            for key, child in node.children.items():
+            children = node.children.items()
+            for key, child in sorted(children):
                 traverse(child, params.copy())
         traverse(self.root, params)
 
@@ -114,6 +142,7 @@ class Tree:
         }
         traverse(self.root, 0)
         self.size = self.root.info['size'] + 1
+        self.levels['nodes'][0] = 1
         self.levels = {
             k: [
                 v[d] for d in range(self.size)
@@ -124,17 +153,33 @@ class Tree:
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter()
+    timer = Timer()
 
     #  directory = 'datasets/miniimagenet'
     #  directory = 'datasets/omniglot'
     directory = 'datasets/dummy'
 
-    start = time.perf_counter()
-    tree = Tree(directory)
-    stop = time.perf_counter()
-    print(f'{"Tree Initialization":>30} :', stop - start, 'ms')
-    #  print(tree)
+    tree = timer.time(lambda: Tree(directory), 'Tree __init__()')
 
-    for i, x in enumerate(tree):
-        print(i)
-        pp.pprint(x)
+    def callback(file):
+        if isinstance(file, Path):
+            return str(file)
+        return file
+    samplers = {
+        2: (ParallelSampler, {'batch_size': 2}),
+        3: (BatchSampler, {'batch_size': 2}),
+    }
+    timer.time(lambda: tree.put_samplers(
+        samplers, callback), 'Tree put_samplers()')
+
+    tree_str = timer.time(lambda: str(tree), 'Tree __str__()')
+    #  print(tree_str)
+
+    iteration = timer.time(
+        lambda: [x for x in tree],
+        'Tree iteration'
+    )
+
+    pp.pprint(iteration)
+
+    print(timer)

@@ -54,7 +54,7 @@ class Dataset:
         """
         Returns an iterable over the files in the dataset
         """
-        return self.tree.generator(self.load_image)
+        pass
 
     def __len__(self):
         """
@@ -114,82 +114,55 @@ class FewShotDataset (Dataset):
         Returns an iterator over images in the dataset with the
         specified parameters
         """
-        assert directory is not None
-        assert params is not None
-        full_permute = params.get('full_permute', False)
-        batch_size = params.get('batch_size', 1)
-        k = params['k']
-        n = params['n']
-        m = params['m']
-        self.tree.put_iters([
-            (self.class_level - 1, RandomBatchSampler, {
-                'batch_size': k,
-                'full_permute': full_permute
-            }),
-            (self.class_level, RandomBatchSampler, {
-                'batch_size': n + m,
-                'full_permute': full_permute
-            })
-        ])
-        split = self.tree.get(directory)
-        images = split.generator(self.load_image)
-        tasks = self.collate_images(images)
-        batches = self.batch(tasks, batch_size)
-        yield from batches
+        pass
+        #  assert directory is not None
+        #  assert params is not None
+        #  full_permute = params.get('full_permute', False)
+        #  batch_size = params.get('batch_size', 1)
+        #  k = params['k']
+        #  n = params['n']
+        #  m = params['m']
+        #  self.tree.put_iters([
+        #      (self.class_level - 1, RandomBatchSampler, {
+        #          'batch_size': k,
+        #          'full_permute': full_permute
+        #      }),
+        #      (self.class_level, RandomBatchSampler, {
+        #          'batch_size': n + m,
+        #          'full_permute': full_permute
+        #      })
+        #  ])
+        #  split = self.tree.get(directory)
+        #  images = split.generator(self.load_image)
+        #  tasks = self.collate_images(images)
+        #  batches = self.batch(tasks, batch_size)
+        #  yield from batches
 
 
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter()
-
-    times = collections.defaultdict(float)
-
-    def timer(callback, label):
-        start = time.perf_counter()
-        val = callback()
-        stop = time.perf_counter()
-        times[label] = stop - start
-        return val
+    timer = util.Timer()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     #  path = 'datasets/omniglot'
-    path = 'datasets/miniimagenet'
-    #  path = 'datasets/dummy'
+    #  path = 'datasets/miniimagenet'
+    path = 'datasets/dummy'
 
-    dataset = timer(lambda: FewShotDataset(path, device), 'DATASET INIT')
-    _ = timer(lambda: print(dataset), 'DATASET __STR__')
+    params = {
+        'batch_size': 10,
+        'k': 1,
+        'n': 1,
+        'm': 1
+    }
 
-    pp.pprint(dict(times))
+    dataset = timer.time(
+        lambda: FewShotDataset(path, device),
+        'dataset __init__()'
+    )
+    timer.time(lambda: print(dataset), 'dataset __str__()')
+    #  iteration = timer.time(lambda: [x for x in dataset], 'dataset __iter__()')
+    #  timer.time(lambda: dataset.split(params, 'train'), 'dataset split()')
 
-    #  start = time.perf_counter()
-    #  dataset = FewShotDataset(path, device)
-    #  stop = time.perf_counter()
-    #  print('INITIALIZE TIME: ', stop - start)
-    #  start = time.perf_counter()
-    #  print(dataset)
-    #  stop = time.perf_counter()
-    #  print('__STR__ TIME: ', stop - start)
-
-    #  params = {
-    #      'batch_size': 20,
-    #      'full_permute': True,
-    #      'k': 1,
-    #      'n': 0,
-    #      'm': 1,
-    #  }
-
-    #  print('ITERATING: ', params)
-    #  start = time.perf_counter()
-    #  iterator = dataset.split(params, 'train')
-    #  n_seen = 0
-    #  for i, x in enumerate(iterator):
-    #      print(f'{i:4}', x.shape)
-    #      n_seen += functools.reduce(lambda a, b: a * b, x.shape[:3])
-    #      pass
-    #  N_images = len(dataset.tree.get('train').all_children())
-    #  stop = time.perf_counter()
-    #  print('ITERATION TIME: ', stop - start)
-    #  print('TOTAL IMAGES: ', N_images)
-    #  print('SEEN IMAGES: ', n_seen)
-    #  print('PERCENT PERMUTED: ', 100 * (n_seen / N_images))
+    print(timer)

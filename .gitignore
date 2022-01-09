@@ -1,6 +1,7 @@
 **/__pycache__/
 **/*.code-workspace
-datasets/
+datasets/*
+!datasets/dummy
 models/
 logs/
 analysis/graphs/

@@ -2,17 +2,19 @@ import os
 import itertools
 
 
-class color:
-    PURPLE = '\033[1;35;48m'
-    CYAN = '\033[1;36;48m'
-    BOLD = '\033[1;37;48m'
-    BLUE = '\033[1;34;48m'
-    GREEN = '\033[1;32;48m'
-    YELLOW = '\033[1;33;48m'
-    RED = '\033[1;31;48m'
-    BLACK = '\033[1;30;48m'
-    UNDERLINE = '\033[4;37;48m'
+class Color:
+
     END = '\033[1;37;0m'
+
+    def PURPLE(str): return '\033[1;35;48m' + str + Color.END
+    def CYAN(str): return '\033[1;36;48m' + str + Color.END
+    def BOLD(str): return '\033[1;37;48m' + str + Color.END
+    def BLUE(str): return '\033[1;34;48m' + str + Color.END
+    def GREEN(str): return '\033[1;32;48m' + str + Color.END
+    def YELLOW(str): return '\033[1;33;48m' + str + Color.END
+    def RED(str): return '\033[1;31;48m' + str + Color.END
+    def BLACK(str): return '\033[1;30;48m' + str + Color.END
+    def UNDERLINE(str): return '\033[4;37;48m' + str + Color.END
 
 
 def section(msg):
