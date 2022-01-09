@@ -1,8 +1,11 @@
 import os
 import pprint
 import collections
+import time
 
 from pathlib import Path
+
+from .samplers import Sampler, BatchSampler, ParallelSampler
 
 
 class color:
@@ -25,15 +28,24 @@ class TreeNode:
         self.path = path
         self.files = []
         self.children = collections.OrderedDict()
+        self.sampler = None
 
     def add_child(self, child):
         self.children[child.key] = child
 
     def __iter__(self):
-        pass
-
-    def __next__(self):
-        pass
+        if self.files:
+            yield from self.files
+        elif not self.sampler:
+            children = list(self.children.values())
+            self.sampler = ParallelSampler(children, {'batch_size': 2})
+            for sample in self.sampler:
+                if isinstance(sample, list):
+                    yield sample
+                else:
+                    yield from sample
+        elif self.sampler:
+            yield from self.sampler
 
 
 class Tree:
@@ -57,6 +69,9 @@ class Tree:
         msg = []
         self.dfs(callback, {'depth': 0})
         return '\n'.join(msg)
+
+    def __iter__(self):
+        yield from self.root
 
     def bfs(self, callback=None, params={}):
         queue = [self.root]
@@ -89,9 +104,17 @@ class Tree:
 
 if __name__ == '__main__':
 
+    pp = pprint.PrettyPrinter()
+
     #  directory = 'datasets/miniimagenet'
     #  directory = 'datasets/omniglot'
     directory = 'datasets/dummy'
 
+    start = time.perf_counter()
     tree = Tree(directory)
+    stop = time.perf_counter()
+    print(f'{"Tree Initialization":>30} :', stop - start, 'ms')
     #  print(tree)
+
+    for i, x in enumerate(tree):
+        pp.pprint(x)
