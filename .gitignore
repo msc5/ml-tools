@@ -6,8 +6,6 @@ models/
 logs/
 analysis/graphs/
 episode_filename_list/
-config.yaml
-config.json
 saves/
 data/processed_images/
 **/processed_images/
