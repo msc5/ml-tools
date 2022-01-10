@@ -1,0 +1,43 @@
+{
+	"datasets": {
+		"omniglot": {
+			"structure": ["Split", "Language", "Character", "Image"],
+			"class_level": 2,
+			"channels": 1,
+			"path": "datasets/omniglot"
+		},
+		"miniimagenet": {
+			"structure": ["Split", "Class", "Image"],
+			"class_level": 1,
+			"channels": 3,
+			"path": "datasets/miniimagenet"
+		},
+		"dummy": {
+			"structure": ["Split", "Class", "Subclass", "Image"],
+			"class_level": 2,
+			"channels": 1,
+			"path": "datasets/dummy"
+		}
+	},
+	"models": {
+		"debug": {
+			"arch": "CustomNetwork",
+			"loss_fn": "MSE",
+			"meta_layers": 3
+		}
+	},
+	"experiments": {
+		"fewshot": {
+			"dataset": "omniglot",
+			"todo": "train",
+			"batch_size": 20,
+			"k": 5,
+			"n": 1,
+			"m": 1,
+			"epochs": 250,
+			"learning_rate": 0.001,
+			"schedule": [50, 100, 200]
+		}
+	},
+	"todo": [["debug", "fewshot"]]
+}
