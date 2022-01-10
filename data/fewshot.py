@@ -16,6 +16,7 @@ import util
 
 from .tests import iterate_dataset
 from .tree import Tree
+from .samplers import Sampler, BatchSampler, ParallelSampler
 
 
 class Dataset:
@@ -80,7 +81,7 @@ class Dataset:
     def batch(self, data, batch_size):
         params = {
             'batch_size': batch_size,
-            'keep_last': True,
+            'batch_mode': 'keep_last',
         }
         for batch in BatchSampler(data, params):
             yield self.cat(batch)
@@ -109,34 +110,22 @@ class FewShotDataset (Dataset):
                 for classes in task
             ], dim=0)
 
-    def split(self, params, directory):
+    def get_iter(self, params):
         """
         Returns an iterator over images in the dataset with the
         specified parameters
         """
-        pass
-        #  assert directory is not None
-        #  assert params is not None
-        #  full_permute = params.get('full_permute', False)
-        #  batch_size = params.get('batch_size', 1)
-        #  k = params['k']
-        #  n = params['n']
-        #  m = params['m']
-        #  self.tree.put_iters([
-        #      (self.class_level - 1, RandomBatchSampler, {
-        #          'batch_size': k,
-        #          'full_permute': full_permute
-        #      }),
-        #      (self.class_level, RandomBatchSampler, {
-        #          'batch_size': n + m,
-        #          'full_permute': full_permute
-        #      })
-        #  ])
-        #  split = self.tree.get(directory)
-        #  images = split.generator(self.load_image)
-        #  tasks = self.collate_images(images)
-        #  batches = self.batch(tasks, batch_size)
-        #  yield from batches
+        def load_image(path): return self.transform(Image.open(path))
+        batch_mode = params.get('batch_mode', 'normal')
+        batch_size = params.get('batch_size', 1)
+        k, n, m = params.get('k', 1), params.get('n', 1), params.get('m', 1)
+        self.tree.put_samplers({
+            self.class_level - 1: (ParallelSampler, {'batch_size': k}),
+            self.class_level: (BatchSampler, {'batch_size': n + m})
+        }, load_image)
+        #  collated = self.collate_images(self.tree)
+        #  batched = self.batch(collated, batch_size)
+        #  yield from batched
 
 
 if __name__ == '__main__':
@@ -152,7 +141,7 @@ if __name__ == '__main__':
 
     params = {
         'batch_size': 10,
-        'k': 1,
+        'k': 2,
         'n': 1,
         'm': 1
     }
@@ -162,7 +151,10 @@ if __name__ == '__main__':
         'dataset __init__()'
     )
     timer.time(lambda: print(dataset), 'dataset __str__()')
-    #  iteration = timer.time(lambda: [x for x in dataset], 'dataset __iter__()')
+    iteration = timer.time(
+        lambda: [x for x in dataset.get_iter(params)], 'dataset __iter__()')
     #  timer.time(lambda: dataset.split(params, 'train'), 'dataset split()')
+
+    pp.pprint(iteration)
 
     print(timer)

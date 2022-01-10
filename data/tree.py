@@ -85,6 +85,11 @@ class Tree:
     def __iter__(self):
         yield from self.root
 
+    def __len__(self):
+        # TODO
+        pass
+        #  return sum([1 for _ in iter(self)])
+
     def put_samplers(self, samplers, callback):
         def put_sampler(node, params):
             depth = node.info['depth']
@@ -179,6 +184,9 @@ if __name__ == '__main__':
         lambda: [x for x in tree],
         'Tree iteration'
     )
+
+    tree_length = timer.time(lambda: len(tree), 'Tree __len__()')
+    print(tree_length)
 
     pp.pprint(iteration)
 
