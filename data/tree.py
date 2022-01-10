@@ -5,7 +5,7 @@ import time
 
 from pathlib import Path
 
-from util import Color, Timer
+from util import Color, Timer, columnate
 from .samplers import Sampler, BatchSampler, ParallelSampler
 
 
@@ -17,8 +17,8 @@ class TreeNode:
         self.files = []
         self.info = collections.defaultdict(int)
         self.children = {}
-        self.sampler = Sampler
-        self.params = {}
+        #  self.sampler = Sampler
+        #  self.params = {}
         self.callback = lambda x: x
 
     def __len__(self):
@@ -44,12 +44,12 @@ class TreeNode:
 
     def generate(self):
         #  print(self.key, self.callback)
-        if self.files:
-            data = [self.callback(f) for f in self.files]
-        else:
-            data = list(self.children.values())
-        sampler = self.sampler(data, self.params)
-        for sample in sampler:
+        #  if self.files:
+        #      data = [self.callback(f) for f in self.files]
+        #  else:
+        #      data = list(self.children.values())
+        #  sampler = self.sampler(data, self.params)
+        for sample in self.sampler:
             if isinstance(sample, TreeNode):
                 yield from sample.generate()
             elif isinstance(sample, list):
@@ -76,7 +76,8 @@ class Tree:
             msg.append(format([
                 Color.CYAN(node.key),
                 Color.YELLOW(str(node.sampler)),
-                Color.GREEN(str(node.callback))
+                Color.GREEN(str(node.callback)),
+                Color.BLUE(str(node.info))
             ], node.info['depth']))
         msg = []
         self.dfs(callback)
@@ -95,10 +96,16 @@ class Tree:
             depth = node.info['depth']
             node.callback = callback
             if depth in samplers:
-                node.sampler, node.params = samplers[depth]
+                sampler, params = samplers[depth]
             else:
-                node.sampler, node.params = Sampler, {}
-        self.dfs(put_sampler)
+                sampler, params = Sampler, {}
+            if node.files:
+                data = [node.callback(f) for f in node.files]
+            else:
+                data = list(node.children.values())
+            node.sampler = sampler(data, params)
+            node.info['n_iter'] = len(node.sampler)
+        self.dfs(put_sampler, mode='postorder')
         return self
 
     def bfs(self, callback=None, params={}):
@@ -111,13 +118,15 @@ class Tree:
             for key, child in sorted(children):
                 queue.append(child)
 
-    def dfs(self, callback=None, params={}):
+    def dfs(self, callback=None, params={}, mode='preorder'):
         def traverse(node, params):
-            if callback:
+            if callback and mode == 'preorder':
                 callback(node, params)
             children = node.children.items()
             for key, child in sorted(children):
                 traverse(child, params.copy())
+            if callback and mode == 'postorder':
+                callback(node, params)
         traverse(self.root, params)
 
     def build_from_dir(self):
@@ -160,19 +169,22 @@ if __name__ == '__main__':
     pp = pprint.PrettyPrinter()
     timer = Timer()
 
-    #  directory = 'datasets/miniimagenet'
+    directory = 'datasets/miniimagenet'
     #  directory = 'datasets/omniglot'
-    directory = 'datasets/dummy'
+    #  directory = 'datasets/dummy'
 
     tree = timer.time(lambda: Tree(directory), 'Tree __init__()')
+
+    k = 2
+    nm = 3
 
     def callback(file):
         if isinstance(file, Path):
             return str(file)
         return file
     samplers = {
-        2: (ParallelSampler, {'batch_size': 2}),
-        3: (BatchSampler, {'batch_size': 2}),
+        1: (ParallelSampler, {'batch_size': k}),
+        2: (BatchSampler, {'batch_size': nm}),
     }
     timer.time(lambda: tree.put_samplers(
         samplers, callback), 'Tree put_samplers()')
@@ -185,9 +197,18 @@ if __name__ == '__main__':
         'Tree iteration'
     )
 
-    tree_length = timer.time(lambda: len(tree), 'Tree __len__()')
-    print(tree_length)
+    #  tree_length = timer.time(lambda: len(tree), 'Tree __len__()')
+    #  print(tree_length)
 
-    pp.pprint(iteration)
+    #  pp.pprint(iteration)
+    n = len(iteration)
+    n_seen = n * k * nm
+    n_files = tree.root.info['N_files']
+    p_permuted = round(100 * n_seen / n_files, 5)
+    columnate({
+        'Length of Iteration': n,
+        'Number of Images Seen': str(n_seen) + ' / ' + str(n_files),
+        'Permuted': p_permuted
+    })
 
     print(timer)

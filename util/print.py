@@ -17,6 +17,10 @@ class Color:
     def UNDERLINE(str): return '\033[4;37;48m' + str + Color.END
 
 
+def columnate(entries):
+    for key, value in entries.items():
+        print(f'{key:>30} : {value:<30}')
+
 def section(msg):
     n, _ = os.get_terminal_size()
     l = len(msg)

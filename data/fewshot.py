@@ -12,8 +12,8 @@ import time
 import pprint
 import collections
 
-import util
 
+from util import Timer, tabulate, columnate, section
 from .tests import iterate_dataset
 from .tree import Tree
 from .samplers import Sampler, BatchSampler, ParallelSampler
@@ -44,7 +44,7 @@ class Dataset:
         Returns a string representation of the dataset
         """
         size = self.tree.root.info['size']
-        return self.name + '\n' + util.tabulate(
+        return self.name + '\n' + tabulate(
             ('Depth', range(size + 1)),
             ('Name', self.structure),
             ('Folder Count', self.tree.levels['nodes']),
@@ -123,6 +123,7 @@ class FewShotDataset (Dataset):
             self.class_level - 1: (ParallelSampler, {'batch_size': k}),
             self.class_level: (BatchSampler, {'batch_size': n + m})
         }, load_image)
+        yield from self.tree
         #  collated = self.collate_images(self.tree)
         #  batched = self.batch(collated, batch_size)
         #  yield from batched
@@ -131,18 +132,18 @@ class FewShotDataset (Dataset):
 if __name__ == '__main__':
 
     pp = pprint.PrettyPrinter()
-    timer = util.Timer()
+    timer = Timer()
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    #  path = 'datasets/omniglot'
+    path = 'datasets/omniglot'
     #  path = 'datasets/miniimagenet'
-    path = 'datasets/dummy'
+    #  path = 'datasets/dummy'
 
     params = {
         'batch_size': 10,
-        'k': 2,
-        'n': 1,
+        'k': 5,
+        'n': 5,
         'm': 1
     }
 
@@ -153,8 +154,15 @@ if __name__ == '__main__':
     timer.time(lambda: print(dataset), 'dataset __str__()')
     iteration = timer.time(
         lambda: [x for x in dataset.get_iter(params)], 'dataset __iter__()')
-    #  timer.time(lambda: dataset.split(params, 'train'), 'dataset split()')
 
-    pp.pprint(iteration)
+    n = len(iteration)
+    n_seen = n * params['k'] * (params['n'] + params['m'])
+    n_files = dataset.tree.root.info['N_files']
+    p_permuted = round(100 * n_seen / n_files, 5)
+    columnate({
+        'Length of Iteration': n,
+        'Number of Images Seen': str(n_seen) + ' / ' + str(n_files),
+        'Permuted': p_permuted
+    })
 
     print(timer)

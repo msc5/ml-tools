@@ -3,5 +3,5 @@
 #  from .timer import *
 
 from .file import mkdir
-from .print import Color, section, tabulate
+from .print import Color, section, tabulate, columnate
 from .timer import Timer
