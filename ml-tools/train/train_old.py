@@ -24,7 +24,6 @@ from .logger import Logger
 
 
 def train(
-        name,
         model,
         dataloader,
         callback,
@@ -83,24 +82,15 @@ def train(
             bar_format='{desc}|{bar:20}| {rate_fmt}',
             leave=False,
         )
-        for j, (train_ds, test_ds) in enumerate(t):
-            train_results = callback(
-                model,
-                train_ds,
-                optimizer,
-                loss_fn,
-                device,
-                train=True
-            )
-            with torch.no_grad():
-                test_results = callback(
-                    model,
-                    test_ds,
-                    None,
-                    loss_fn,
-                    device,
-                    train=False
-                )
+        for j, x in enumerate(t):
+            #  train_results = callback(
+            #      model,
+            #      train_ds,
+            #      optimizer,
+            #      loss_fn,
+            #      device,
+            #      train=True
+            #  )
             toc = time.perf_counter()
             log = logger.log((*train_results, *test_results), toc - tic)
             t.set_description(log)

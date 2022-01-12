@@ -4,8 +4,6 @@ import torch.nn as nn
 
 from torchinfo import summary
 
-# each of which is a 3 × 3 convolution with 64 filters followed by batch normalization [10], a Relu layer, and 2 × 2 max-pooling. padding should be 1 per conv block
-
 
 class Conv(nn.Module):
 
@@ -22,7 +20,6 @@ class Conv(nn.Module):
         return self.conv_layer(x)
 
 
-# if input is c x 28 x 28, output will be 64 x 1 x 1
 class Embed(nn.Module):
 
     def __init__(self, fi, fo):
@@ -72,9 +69,10 @@ class Distance(nn.Module):
 
 class MatchingNets(nn.Module):
 
-    def __init__(self, device, fi, fo):
+    def __init__(self, device, fi):
         super(MatchingNets, self).__init__()
         self.device = device
+        fo = 64
         self.f = Embed(fi, fo)
         self.g = Embed(fi, fo)
         self.distance = Distance()
@@ -95,11 +93,12 @@ class MatchingNets(nn.Module):
 if __name__ == '__main__':
     k = 20
     n = 1
-    q = 20
     m = 19
+    c = 1
+    s = 28
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    model = MatchingNets(device, 1, 64).to(device)
+    model = MatchingNets(device, c).to(device)
     summary(model, input_size=[
-        (k, n, 1, 28, 28),
-        (q, m, 1, 28, 28)
+        (k, n, c, s, s),
+        (k, m, c, s, s)
     ], device=device)

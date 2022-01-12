@@ -24,6 +24,10 @@
 			"arch": "CustomNetwork",
 			"loss_fn": "MSE",
 			"meta_layers": 3
+		},
+		"mn_debug": {
+			"arch": "MatchingNetwork",
+			"loss_fn": "MSE"
 		}
 	},
 	"experiments": {
