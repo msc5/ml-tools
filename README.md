@@ -10,7 +10,9 @@ Datasets often follow some heirarchical structure, with nested folders in a tree
 
 For example, say you needed to batch two images for each "episode" of training:
 
-<p align='center'><img src="vis/batch.gif" width=400/><\p>
+<p align='center'>
+  <img src="vis/batch.gif" width=400/>
+</p>
 
 This is done using the put_samplers() method of the .tree module:
 ```
@@ -27,23 +29,25 @@ Where `[Folder Depth]` specifies how deep in the folder tree that the target of 
   
 And then dataset iteration is performed with:
 ```
-  for x in dataset:
-    > do something with data
+for x in dataset:
+  > do something with data
 ```
 
 ### Few-Shot Sampling
 
 Or say you needed k batches of n + m sub-batches, taken from specific levels of the directory tree for each episode, creating a few-shot-esque task:
 
-<p align='center'><img src="vis/fewshot.gif" width=400/><\p>
+<p align='center'>
+  <img src="vis/fewshot.gif" width=400/>
+</p>
   
 Likewise, this can be performed with a slight variation to the put_samplers() method:
 ```
-  dataset = Dataset(path, device)
-  dataset.tree.put_samplers({
-    2: (ParallelSampler, lambda x: x, {'batch_size': 2}),
-    3: (BatchSampler, lambda x: x, {'batch_size': 2})
-  })
+dataset = Dataset(path, device)
+dataset.tree.put_samplers({
+  2: (ParallelSampler, lambda x: x, {'batch_size': 2}),
+  3: (BatchSampler, lambda x: x, {'batch_size': 2})
+})
 ```
 
 Sometimes, certain parameters are better in these cases for fuller dataset permutation, and in some cases sizeable gains or losses can be made in that regard given choice of parameters k, n, and m, however, ml-tools will always try to maximize permutation:
@@ -51,4 +55,4 @@ Sometimes, certain parameters are better in these cases for fuller dataset permu
 <p align='center'>
           <img src="vis/fewshot3.gif" width=400/>
           <img src="vis/fewshot4.gif" width=400/>
-<\p>
+</p>
