@@ -45,3 +45,10 @@ Likewise, this can be performed with a slight variation to the put_samplers() me
     3: (BatchSampler, lambda x: x, {'batch_size': 2})
   })
 ```
+
+Sometimes, certain parameters are better in these cases for fuller dataset permutation, and in some cases sizeable gains or losses can be made in that regard given choice of parameters k, n, and m, however, ml-tools will always try to maximize permutation:
+ 
+<p align='center'>
+          <img src="vis/fewshot3.gif" width=400/>
+          <img src="vis/fewshot4.gif" width=400/>
+<\p>
