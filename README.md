@@ -2,7 +2,7 @@
 
 By Alkin Kaz, Sam Liang, Matthew Coleman
 
-## Learning-Task-Agnostic, Performant, Simple, Dataset Sampling
+## Simple, Task-Agnostic, High Performance, Dataset Sampling
 
 Datasets often follow some heirarchical structure, with nested folders in a tree-like data structure. By specifying *how* to sample images at each level of the tree, ml-tools allows you to spend less time worrying about your dataset configuration and more time working on your models.
 
