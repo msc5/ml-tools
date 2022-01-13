@@ -6,6 +6,7 @@ import itertools
 
 from rich import print
 from rich.tree import Tree as rTree
+from rich.console import Console
 
 from mltools.data.dataset import Dataset
 from mltools.data.samplers import Sampler, BatchSampler, ParallelSampler
@@ -18,12 +19,6 @@ if __name__ == '__main__':
     path = 'datasets/dummy'
 
     dataset = Dataset(path, device)
-
-    params = {
-        'k': 5,
-        'n': 5,
-        'm': 1
-    }
 
     def animate(tree, x):
         def callback(node, params):
@@ -49,8 +44,8 @@ if __name__ == '__main__':
     # Few-Shot Sampling
 
     dataset.tree.put_samplers({
-        2: (ParallelSampler, lambda x: x, {'batch_size': 3}),
-        3: (BatchSampler, lambda x: x, {'batch_size': 2})
+        #  2: (ParallelSampler, lambda x: x, {'batch_size': 2}),
+        3: (ParallelSampler, lambda x: x, {'batch_size': 5})
     })
 
     subtree = dataset.tree.get('train/class 1')
