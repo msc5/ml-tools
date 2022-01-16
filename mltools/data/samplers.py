@@ -1,7 +1,6 @@
 import torch
 
 import random
-import pprint
 import math
 
 
@@ -79,32 +78,30 @@ class BatchSampler(Sampler):
 
     def __iter__(self):
         sampler = BatchSampler(self.data, self.params)
-        sampler.data = [iter(d) if isinstance(d, Sampler)
-                        else d for d in self.data]
 
         if self.batch_mode == 'sorted':
             sampler.data = sorted(sampler.data)
         if self.batch_mode == 'random':
             random.shuffle(sampler.data)
 
+        def gd(a, b): return a // b + (1 if a % b != 0 else 0)
         sampler.i = 0
-        sampler.l = math.ceil(sampler.n / sampler.batch_size)
+        sampler.l = gd(sampler.n, sampler.batch_size)
+        print(sampler, sampler.l)
         sampler.p = list(range(sampler.batch_size))
         sampler.v = [sampler.data[p] for p in sampler.p]
+        sampler.v = [iter(v) if isinstance(v, Sampler)
+                     else v for v in sampler.v]
         return sampler
 
     def step(self):
         self.i += 1
-        if self.i > self.l:
+        if self.i >= self.l:
             raise StopIteration
         self.p = [(p + self.batch_size) % self.n for p in self.p]
         self.v = [self.data[p] for p in self.p]
-
-    def swap(self):
-        self.i += 1
-        if self.i + self.batch_size > self.n:
-            raise StopIteration
-        self.v = self.data[self.i:self.i + self.batch_size]
+        self.v = [iter(v) if isinstance(v, Sampler)
+                  else v for v in self.v]
 
     def __next__(self):
         values = []
@@ -119,17 +116,19 @@ class BatchSampler(Sampler):
             else:
                 values.append(v)
                 step = True
-                if self.batch_mode == 'sorted':
-                    self.swap()
         if step:
             self.step()
         assert len(values) == self.batch_size
         return self.callback(values) if self.callback is not None else values
 
     def __len__(self):
-        length = 0
-        batches = [[
-            len(s) if isinstance(s, Sampler) else 1
-            for s in self.data[i:i + self.batch_size]
-        ] for i in range(0, self.n - 1, self.batch_size)]
-        return sum([min(b) for b in batches])
+        pass
+        #  def gd(a, b): return a // b + (1 if a % b != 0 else 0)
+        #  return gd(self.n, self.batch_size)
+
+        #  length = 0
+        #  batches = [[
+        #      len(s) if isinstance(s, Sampler) else 1
+        #      for s in self.data[i:i + self.batch_size]
+        #  ] for i in range(0, self.n - 1, self.batch_size)]
+        #  return sum([min(b) for b in batches])
