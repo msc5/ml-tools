@@ -16,20 +16,24 @@ class Sampler:
 
         """
         assert hasattr(data, '__getitem__')
-        self.data = sorted(
-            [iter(d) if isinstance(d, Sampler) else d for d in data])
+        self.data = data
         self.params = params
-        if self.params:
+        if params is not None:
             self.batch_size = params.get('batch_size', 1)
-            self.batch_mode = params.get('batch_mode', None)
+            self.batch_mode = params.get('batch_mode', 'wrap')
+            self.batch_order = params.get('batch_order', 'random')
+            self.callback = params.get('callback', None)
+        else:
+            self.callback = lambda x: x
         self.n = len(data)
 
     def __iter__(self):
-        self.data = [iter(d) if isinstance(d, Sampler)
-                     else d for d in self.data]
-        self.i = 0
-        self.v = self.data[0]
-        return self
+        sampler = Sampler(self.data, self.params)
+        sampler.data = [iter(d) if isinstance(d, Sampler)
+                        else d for d in self.data]
+        sampler.i = 0
+        sampler.v = sampler.data[0]
+        return sampler
 
     def step(self):
         i = self.i
@@ -39,7 +43,7 @@ class Sampler:
             raise StopIteration
         if self.i < self.n:
             self.v = self.data[self.i]
-        return v
+        return self.callback(v) if self.callback is not None else v
 
     def __next__(self):
         if isinstance(self.v, Sampler):
@@ -70,23 +74,31 @@ class BatchSampler(Sampler):
         super().__init__(data, params)
         assert self.batch_size <= self.n
         assert self.batch_size != 0
+        assert self.batch_mode in ['cutoff', 'wrap']
+        assert self.batch_order in ['sorted', 'random']
 
     def __iter__(self):
-        self.data = [iter(d) if isinstance(d, Sampler)
-                     else d for d in self.data]
-        self.i = 0
-        self.v = self.data[0:self.batch_size]
-        return self
+        sampler = BatchSampler(self.data, self.params)
+        sampler.data = [iter(d) if isinstance(d, Sampler)
+                        else d for d in self.data]
+
+        if self.batch_mode == 'sorted':
+            sampler.data = sorted(sampler.data)
+        if self.batch_mode == 'random':
+            random.shuffle(sampler.data)
+
+        sampler.i = 0
+        sampler.l = math.ceil(sampler.n / sampler.batch_size)
+        sampler.p = list(range(sampler.batch_size))
+        sampler.v = [sampler.data[p] for p in sampler.p]
+        return sampler
 
     def step(self):
-        i = self.i
-        v = self.v
-        self.i += self.batch_size
-        if self.i > self.n:
+        self.i += 1
+        if self.i > self.l:
             raise StopIteration
-        if self.i + self.batch_size <= self.n:
-            self.v = self.data[self.i:self.i + self.batch_size]
-        return v
+        self.p = [(p + self.batch_size) % self.n for p in self.p]
+        self.v = [self.data[p] for p in self.p]
 
     def swap(self):
         self.i += 1
@@ -97,26 +109,22 @@ class BatchSampler(Sampler):
     def __next__(self):
         values = []
         step = False
-        swap = 0
         for v in self.v:
             if isinstance(v, Sampler):
                 try:
                     values.append(next(v))
                 except StopIteration:
-                    if self.batch_mode is None:
-                        self.step()
-                    elif self.batch_mode == 'parallel':
-                        self.swap()
+                    self.step()
                     return next(self)
             else:
                 values.append(v)
                 step = True
-                if self.batch_mode == 'parallel':
+                if self.batch_mode == 'sorted':
                     self.swap()
-        if step and self.batch_mode is None:
+        if step:
             self.step()
         assert len(values) == self.batch_size
-        return values
+        return self.callback(values) if self.callback is not None else values
 
     def __len__(self):
         length = 0
@@ -125,40 +133,3 @@ class BatchSampler(Sampler):
             for s in self.data[i:i + self.batch_size]
         ] for i in range(0, self.n - 1, self.batch_size)]
         return sum([min(b) for b in batches])
-
-
-class ParallelSampler(Sampler):
-
-    def __init__(self, data, params):
-        super().__init__(data, params)
-        self.data = sorted(data)
-        self.parallel = [iter(c) for c in data]
-        self.iterators = self.parallel[:self.batch_size]
-        self.j = self.batch_size
-        self.i = 0
-
-    def __len__(self):
-        lengths = [0 for _ in range(self.batch_size)]
-        for i, c in enumerate(self.data):
-            lengths[i % self.batch_size] += len(c)
-        return min(lengths)
-
-    def __iter__(self):
-        self.parallel = [iter(c) for c in self.data]
-        self.iterators = self.parallel[:self.batch_size]
-        self.j = self.batch_size
-        self.i = 0
-        return self
-
-    def __next__(self):
-        vals = []
-        for i, iterator in enumerate(self.iterators):
-            try:
-                vals.append(next(iterator))
-            except StopIteration:
-                if self.j >= self.n:
-                    raise StopIteration
-                self.iterators[i] = self.parallel[self.j]
-                self.j += 1
-                vals.append(next(self.iterators[i]))
-        return vals

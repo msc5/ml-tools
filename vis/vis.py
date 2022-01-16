@@ -9,20 +9,27 @@ from rich.tree import Tree as rTree
 from rich.console import Console
 
 from mltools.data.dataset import Dataset
-from mltools.data.samplers import Sampler, BatchSampler, ParallelSampler
+from mltools.data.fewshot import FewShotDataset
+from mltools.data.samplers import Sampler, BatchSampler
+from mltools.data.loaders import FewShotLoader
 
 if __name__ == '__main__':
-
-    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
     #  path = 'datasets/omniglot'
     path = 'datasets/dummy'
 
-    dataset = Dataset(path, device)
-
     def animate(tree, x):
         def callback(node, params):
-            params['tree'] = params['tree'].add(node.key)
+            if node.info['depth'] == class_level:
+                key = '[orange1]' + node.key
+            elif node.info['depth'] == class_level - 1:
+                key = '[red]' + node.key
+            else:
+                key = node.key
+            if not 'root' in params:
+                params['root'] = params['tree'] = rTree(key)
+            else:
+                params['tree'] = params['tree'].add(key)
             if node.files:
                 for f in node.files:
                     if f in x:
@@ -34,23 +41,34 @@ if __name__ == '__main__':
                         else:
                             f_str = '[gray]' + str(f.name)
                     params['tree'].add(f_str)
+        P = {}
+        tree.dfs(callback, P, order='pre')
         os.system('clear')
-        rtree = rTree('Dataset')
-        tree.dfs(callback, {'tree': rtree})
-        print(rtree)
-        time.sleep(0.5)
+        print(P['root'])
+        time.sleep(0.2)
 
-
-    # Few-Shot Sampling
-
-    dataset.tree.put_samplers({
-        #  2: (ParallelSampler, lambda x: x, {'batch_size': 2}),
-        3: (ParallelSampler, lambda x: x, {'batch_size': 5})
-    })
-
-    subtree = dataset.tree.get('train/class 1')
+    class_level = 3
+    #  S = [
+    #      {
+    #          'sampler': BatchSampler,
+    #          'sample': 'all',
+    #          'batch_size': 2,
+    #          'batch_mode': 'random'
+    #      },
+    #      {
+    #          'sampler': BatchSampler,
+    #          'batch_size': 2,
+    #          'batch_mode': 'random'
+    #      }
+    #  ]
+    #  dataset.put_samplers(S)
+    #  subtree = dataset.split('test')
+    dataset = Dataset(path)
+    #  split = dataset.split('test')
+    loader = FewShotLoader(dataset, {'k': 2})
     visited = []
-    for x in subtree:
-        animate(subtree, list(itertools.chain(*x)))
+    for x in loader:
+        #  print(x)
+        animate(dataset.tree, list(itertools.chain(*x)))
         #  animate(subtree, x)
-    animate(subtree, [])
+    #  animate(subtree, [])

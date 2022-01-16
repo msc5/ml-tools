@@ -2,12 +2,13 @@ import torch
 
 from torchvision.transforms import ToTensor
 
+from collections import defaultdict
 from pathlib import Path
 from json import load
 from PIL import Image
 
-from ..util import tabulate
 from .tree import Tree
+from .samplers import Sampler, BatchSampler
 
 
 class Dataset:
@@ -15,60 +16,67 @@ class Dataset:
     def __init__(
             self,
             directory: str,
-            device: torch.device
     ):
-        self.device = device
-        self.tree = Tree(directory)
-        self.split = self.tree.root
-        self.transform = ToTensor()
+        gpu_test = torch.cuda.is_available()
+        self.device = torch.device('cuda:0' if gpu_test else 'cpu')
+        self.tree = self.build_from_dir(directory)
         self.path = Path(directory)
-        self.name = self.path.name
-        try:
-            config = load(open('config.json'))['datasets'][self.name]
-            self.structure = ['Root', *config['structure']]
-            self.class_level = config['class_level'] + 1
-        except:
-            print('Error Opening datasets.json')
-            raise
 
-    def __str__(self):
-        """
-        Returns a string representation of the dataset
-        """
-        size = self.tree.root.info['size']
-        return self.name + '\n' + tabulate(
-            ('Depth', range(size + 1)),
-            ('Name', self.structure),
-            ('Folder Count', self.tree.levels['nodes']),
-            ('File Count', self.tree.levels['files']),
-        )
+        # Default Settings
+        self.transform = ToTensor()
 
-    def __iter__(self):
-        """
-        Returns an iterable over the files in the dataset
-        """
-        return iter(self.split)
+        #  try:
+        #      config = load(open('config.json'))['datasets'][self.name]
+        #      self.structure = ['Root', *config['structure']]
+        #      self.class_level = config['class_level'] + 1
+        #  except:
+        #      raise
 
-    def __len__(self):
-        """
-        Returns the length of the dataset's total iteration
-        """
-        return len(self.split)
+    def build_from_dir(self, directory):
+        """ Builds a Tree from a starting directory """
+        def traverse(parent, depth):
+            size = 1
+            N_children = N_files = 0
+            for path in parent.path.iterdir():
+                if path.is_dir():
+                    child = parent.add_child(path)
+                    s, c, f = traverse(child, depth + 1)
+                    size = s if s > size else size
+                    N_children += c
+                    N_files += f
+                    self.levels['nodes'][depth + 1].append(child)
+                else:
+                    parent.add_file(path)
+                    N_files += 1
+                    self.levels['files'][depth + 1].append(path)
 
-    def info(self):
-        return self.split.info
+            # Set Default Samplers
+            if parent.files:
+                parent.sampler = Sampler(parent.files, {})
+            else:
+                samplers = [iter(c) for c in parent.get_children()]
+                parent.sampler = Sampler(samplers, {})
 
-    def load_image(self, tree):
-        """
-        Takes a tree as input and returns the file associated with its path
-        """
-        image = Image.open(tree.val)
-        return self.transform(image).to(device)
+            # Set Tree Info
+            parent.info['size'] = size
+            parent.info['depth'] = depth
+            parent.info['N_children'] = N_children
+            parent.info['N_files'] = N_files
+            return size + 1, N_children + 1, N_files
 
-    def split(self, directory):
-        assert directory is not None
-        split = self.tree.get(directory)
-        return split.generator(self.load_image)
+        self.levels = {
+            'nodes': defaultdict(list),
+            'files': defaultdict(list)
+        }
+        path = Path(directory)
+        root = Tree(path.name, path)
+        traverse(root, 0)
+        self.size = root.info['size'] + 1
+        self.info = root.info
+        return root
+
+    def split(self, path):
+        return self.tree.get(path)
 
     def collate(self, tensors):
         return torch.cat([x.unsqueeze(0) for x in tensors])
