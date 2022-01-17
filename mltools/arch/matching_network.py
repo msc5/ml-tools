@@ -96,6 +96,7 @@ if __name__ == '__main__':
     m = 19
     c = 1
     s = 28
+    #  s = 84
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model = MatchingNets(device, c).to(device)
     summary(model, input_size=[

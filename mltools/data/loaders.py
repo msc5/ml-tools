@@ -1,4 +1,9 @@
+import torch
 import random
+import itertools
+
+from PIL import Image
+from torchvision.transforms import ToTensor
 
 from .dataset import Dataset
 from .samplers import Sampler, BatchSampler
@@ -7,8 +12,12 @@ from .samplers import Sampler, BatchSampler
 class FewShotLoader:
 
     def __init__(self, dataset: Dataset, params: object = None):
+
+        self.device = torch.device(
+            'cuda:0' if torch.cuda.is_available() else 'cpu')
         self.dataset = dataset
         self.params = params
+        self.transform = ToTensor()
 
         class_level = dataset.info['size'] - 1
         self.k = params.get('k',  1)
@@ -31,10 +40,21 @@ class FewShotLoader:
     def __next__(self):
         self.c = random.sample(range(self.C), self.k)
         self.e = random.sample(range(self.E), self.b)
-        for c in self.c:
-            for e in self.e:
-                if not self.visited[c][e]:
-                    self.visited[c][e] = True
-                    self.v += 1
-        print(self.v / (self.C * self.E))
-        return [[self.examples[c][e] for e in self.e] for c in self.c]
+        for c, e in itertools.product(self.c, self.e):
+            if not self.visited[c][e]:
+                self.visited[c][e] = True
+                self.v += 1
+        idx = [[self.examples[c][e] for e in self.e] for c in self.c]
+        img = [[self.load(e) for e in c] for c in idx]
+        s = self.collate([e[:self.n] for e in img])
+        q = self.collate([e[self.n:] for e in img])
+        label = torch.eye(self.k).repeat_interleave(
+            self.m, dim=0).to(self.device)
+        return s, q, label
+
+    def load(self, img):
+        return self.transform(Image.open(img).resize((28, 28)))
+
+    def collate(self, img):
+        def cat(l): return torch.cat([c.unsqueeze(0) for c in l])
+        return cat([cat(i) for i in img]).to(self.device)

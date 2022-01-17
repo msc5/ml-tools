@@ -53,10 +53,10 @@ class Embedding(nn.Module):
             # reshape back into num_class x num_examples x [determined by convolution filters and downsampling]
 
             # Omniglot
-            x4 = x4.view(num_classes, num_examples_per_class, 64, 5, 5)
+            #  x4 = x4.view(num_classes, num_examples_per_class, 64, 5, 5)
 
             # Mini Image net
-            # x4 = x4.view(num_classes, num_examples_per_class, 64, 19, 19)
+            x4 = x4.view(num_classes, num_examples_per_class, 64, 19, 19)
 
             # element-wise sum of embeddings of all examples of each class
             x4 = torch.sum(x4, 1)
@@ -84,7 +84,7 @@ class Relation(nn.Module):
         # Padding="same" for Omniglot
         self.conv2 = nn.Sequential(
             nn.Conv2d(out_channels, out_channels,
-                      kernel_size=3, padding="same"),
+                      kernel_size=3),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(),
             nn.MaxPool2d(2)
@@ -175,10 +175,13 @@ if __name__ == '__main__':
     # Mimic Mini Image Net Mimic
     filters_in = 1
     in_feat_rel = 64
-    k = 20
+    k = 5
     n = 1
-    m = 19
-    model = RelationNetwork(filters_in, 64, in_feat_rel, k, n, m)
+    m = 1
+    c = 3
+    s = 84
+    model = RelationNetwork(c, 64, in_feat_rel, k, n, m)
     # model = RelationNetwork(3, 64, 128, 64, 576, num_classes=num_classes, support_num_examples_per_class=support_num_examples_per_class,
     #                         query_num_examples_per_class=query_num_examples_per_class).to(device)
-    summary(model, input_size=[(k, n, 1, 28, 28), (k, m, 1, 28, 28)])
+    #  s = 28
+    summary(model, input_size=[(k, n, c, s, s), (k, m, c, s, s)])
